@@ -1,0 +1,44 @@
+{
+  "ticket_count_by_priority": {
+    "high": 7,
+    "low": 7,
+    "medium": 8,
+    "unknown": 1
+  },
+  "average_resolution_time_hours_by_category": {
+    "account": 1.8,
+    "billing": 3.4,
+    "shipping": 5.3,
+    "technical": 8.0,
+    "unknown": 3.0
+  },
+  "average_customer_rating": 4.0,
+  "unresolved_ticket_count": 10,
+  "missing_values_after_cleaning": {
+    "ticket_id": 0,
+    "category": 0,
+    "priority": 0,
+    "description": 0,
+    "resolution_time_hours": 2,
+    "customer_rating": 3,
+    "status": 0
+  },
+  "missing_values_before_cleaning": {
+    "ticket_id": 1,
+    "category": 1,
+    "priority": 1,
+    "description": 1,
+    "resolution_time_hours": 0,
+    "customer_rating": 2,
+    "status": 1
+  },
+  "invalid_numeric_values": {
+    "resolution_time_hours": 2,
+    "customer_rating": 1
+  },
+  "invalid_record_count": 5,
+  "duplicate_ticket_ids": [
+    "T-002"
+  ],
+  "rows_dropped_missing_ticket_id": 1
+}

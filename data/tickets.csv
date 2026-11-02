@@ -1,0 +1,26 @@
+ticket_id,category,priority,description,resolution_time_hours,customer_rating,status
+T-001,billing,high,Charged twice for one order,2.5,5,resolved
+T-002,technical,medium,Unable to reset password,8,4,open
+T-003,account,low,Update registered email address,1,5,resolved
+T-004,technical,high,Mobile app crashes on launch,12,3,pending
+T-005,billing,medium,Refund status not updated,3.5,4,resolved
+T-006,shipping,low,Package delivered successfully,4,5,closed
+T-007,technical,medium,Page returns an unexpected error,bad,2,open
+T-008,account,high,Account temporarily locked,2,4,resolved
+T-009,billing,low,Question about invoice,6,3,open
+T-010,shipping,medium,Delivery address corrected,5,5,resolved
+T-011,technical,high,Checkout API response is slow,10,4,in_progress
+T-012,billing,medium,Request for a copy of the receipt,3.0,,resolved
+T-013,account,low,Two-factor authentication enabled,1.5,5,closed
+T-014,shipping,high,Package has not arrived,9,2,open
+T-015,technical,low,Browser cache caused display issue,3,4,resolved
+T-016,billing,high,Refund calculation needs review,-2,4,pending
+T-017,account,medium,Change account display name,2.5,6,resolved
+T-018,shipping,low,Tracking page shows an old scan,4.5,,resolved
+T-019,technical,medium,Intermittent service timeout,7,5,closed
+T-020,billing,low,Clarification on monthly subscription,2,4,resolved
+T-021,,,Customer asks where to find settings,3,4,open
+,billing,high,Ticket identifier missing from source,4,5,resolved
+T-002,technical,low,Second row with a duplicate ticket ID,1.5,5,resolved
+T-023,account,medium,,2.0,4,
+T-024,shipping,high,Package is marked delivered but missing,4,4,open
