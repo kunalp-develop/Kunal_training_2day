@@ -1,6 +1,7 @@
 # Day 1 — Support Ticket Data Pipeline
 
-This project loads a messy support-ticket CSV, checks it, cleans it, and prints a simple summary. It does **not** train a machine-learning model. Day 1 is only about trustworthy data.
+This project loads a messy support-ticket CSV, checks it, cleans it, and prints a simple summary. 
+
 
 The main idea: **never change the original file**. Read `data/tickets.csv`, clean a copy, save that copy as `data/cleaned_tickets.csv`, and report what was wrong.
 
