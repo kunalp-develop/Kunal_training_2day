@@ -6,3 +6,4 @@ venv/
 data/cleaned_tickets.csv
 data/quality_issues.csv
 .coverage
+*.egg-info/
