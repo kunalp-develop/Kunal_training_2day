@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -59,13 +60,36 @@ class TicketDataProcessor:
         self.duplicate_policy = duplicate_policy
         self.report: dict[str, Any] = {}
 
+    def _check_field_counts(self) -> None:
+        """Reject any record whose field count differs from the header.
+
+        Without this check pandas treats a row with one extra field as having
+        an index column, which silently shifts every value one column left.
+        """
+        with self.input_path.open(newline="", encoding="utf-8-sig") as handle:
+            reader = csv.reader(handle)
+            header = next(reader, None)
+            if header is None:
+                return  # empty file: reported by the pandas read below
+            for record in reader:
+                if not record:
+                    continue  # blank line, skipped the same way pandas does
+                if len(record) != len(header):
+                    raise InvalidCSVError(
+                        f"Could not read a valid CSV from '{self.input_path}': "
+                        f"line {reader.line_num} expected {len(header)} fields, "
+                        f"found {len(record)}"
+                    )
+
     def _read_csv(self) -> pd.DataFrame:
         """Read the raw CSV and translate common parsing errors clearly."""
         try:
+            self._check_field_counts()
             frame = pd.read_csv(
                 self.input_path,
                 keep_default_na=False,
                 na_values=[""],
+                index_col=False,
             )
         except pd.errors.EmptyDataError as exc:
             raise EmptyDatasetError("The CSV file is empty and has no header row.") from exc
