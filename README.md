@@ -37,12 +37,15 @@ tickets.csv  →  TicketDataProcessor.process()  →  cleaned table
 
 ```text
 day1_ticket_pipeline/
-├── data/tickets.csv                 Raw sample data (do not overwrite)
+├── data/
+│   ├── tickets.csv                  Raw sample data (do not overwrite)
+│   ├── cleaned_tickets.csv          Cleaned output (created by the run)
+│   └── quality_issues.csv           Row-level issues (created by the run)
 ├── src/ticket_pipeline/
 │   ├── __init__.py                  Public names you can import
 │   ├── processor.py                 Load, validate, clean
 │   └── analytics.py                 Counts and averages
-├── tests/test_processor.py          10 automated tests
+├── tests/test_processor.py          12 automated tests
 ├── run_pipeline.py                  One command to run everything
 ├── requirements.txt                 pandas, numpy, pytest
 ├── pyproject.toml                   Package + pytest settings
@@ -77,7 +80,7 @@ From the project folder:
 python run_pipeline.py
 ```
 
-This reads `data/tickets.csv`, writes `data/cleaned_tickets.csv`, and prints the analytics JSON. The raw file stays unchanged. The cleaned file is local-only (listed in `.gitignore`).
+This reads `data/tickets.csv`, writes `data/cleaned_tickets.csv` and `data/quality_issues.csv`, and prints the analytics JSON. The raw file stays unchanged. Both output files are local-only (listed in `.gitignore`). The quality CSV has one row per record with an issue; `source_record_number` is one-based, starting at the first data row after the header, and `issues` contains semicolon-separated issue codes.
 
 Use the same steps in your own code:
 
@@ -137,9 +140,9 @@ These are small subclasses of `ValueError`. They exist so tests and callers can 
 
 ### `_read_csv()`
 
-**What it does:** Reads the CSV with pandas. Turns pandas/file errors into `InvalidCSVError` or `EmptyDatasetError`.
+**What it does:** Reads the CSV with pandas, treating empty cells as missing but preserving text such as `"NA"`, `"N/A"`, and `"NULL"`. Turns pandas/file errors into `InvalidCSVError` or `EmptyDatasetError`.
 
-**Why:** Pandas error messages are technical. The wrapper gives a sentence a teammate can understand.
+**Why:** Pandas error messages are technical. The wrapper gives a sentence a teammate can understand. Default NA-token parsing can silently erase legitimate identifiers and text, so only empty CSV fields count as missing.
 
 ---
 
@@ -238,6 +241,13 @@ If the cleaned table is empty, counts are zero / empty / `None` instead of crash
 
 These are **training assumptions**. A real company might use timestamps for duplicates or a fixed list of allowed categories.
 
+## Known limitations
+
+- Duplicate IDs use the first source occurrence because the sample has no timestamp or other rule for choosing a canonical record.
+- Resolution times must be finite and nonnegative; customer ratings must be finite and between 1 and 5 inclusive. These ranges are assignment assumptions, not configurable business rules.
+- Category, priority, and status values are normalized but not checked against an approved vocabulary. Unrecognized statuses remain unresolved; only `resolved` and `closed` count as complete.
+- The quality CSV identifies records by their one-based data-row position rather than ticket ID, so row numbers refer to the unchanged source file.
+
 ---
 
 ## Tests
@@ -246,11 +256,12 @@ These are **training assumptions**. A real company might use timestamps for dupl
 python -m pytest -v --override-ini addopts=
 ```
 
-There are **10 tests** in `tests/test_processor.py`. Each one checks one behaviour:
+There are **13 tests** in `tests/test_processor.py`. Each one checks one behaviour:
 
 | Test | What it proves |
 |---|---|
 | `test_valid_input_is_cleaned_and_raw_file_is_unchanged` | Happy path works; original CSV is not edited |
+| `test_na_like_text_values_are_preserved_but_empty_cells_are_missing` | NA-like text is retained while blank fields remain missing |
 | `test_invalid_csv_raises_clear_exception` | Broken CSV → `InvalidCSVError` |
 | `test_empty_dataset_raises_clear_exception` | Header only → `EmptyDatasetError` |
 | `test_missing_required_columns_are_reported` | Missing columns are named in the error |
@@ -261,7 +272,7 @@ There are **10 tests** in `tests/test_processor.py`. Each one checks one behavio
 | `test_duplicate_policy_can_fail_closed` | `duplicate_policy="raise"` stops on duplicates |
 | `test_analytics_calculates_priority_rating_and_unresolved_count` | Priority counts, billing average, rating, unresolved count |
 
-The `[ 10%]`, `[ 20%]`, … numbers in pytest are **progress** (1 of 10, 2 of 10, …), not a score. `10 passed` means every test succeeded.
+The `[ 10%]`, `[ 20%]`, … numbers in pytest are **progress**, not a score. `13 passed` means every test succeeded.
 
 ---
 

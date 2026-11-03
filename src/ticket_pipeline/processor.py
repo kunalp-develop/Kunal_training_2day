@@ -62,7 +62,11 @@ class TicketDataProcessor:
     def _read_csv(self) -> pd.DataFrame:
         """Read the raw CSV and translate common parsing errors clearly."""
         try:
-            frame = pd.read_csv(self.input_path)
+            frame = pd.read_csv(
+                self.input_path,
+                keep_default_na=False,
+                na_values=[""],
+            )
         except pd.errors.EmptyDataError as exc:
             raise EmptyDatasetError("The CSV file is empty and has no header row.") from exc
         except (pd.errors.ParserError, UnicodeDecodeError, OSError) as exc:
@@ -165,7 +169,9 @@ class TicketDataProcessor:
             "invalid_record_count": len(invalid_reasons),
             "invalid_record_reasons": {
                 row_index: sorted(reasons)
-                for row_index, reasons in sorted(invalid_reasons.items())
+                for row_index, reasons in sorted(
+                    invalid_reasons.items(), key=lambda item: int(item[0])
+                )
             },
             "duplicate_policy": self.duplicate_policy,
         }
