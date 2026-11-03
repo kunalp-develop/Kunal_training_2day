@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .errors import EmptyDatasetError, InvalidCSVError, MissingColumnsError
+
 
 REQUIRED_COLUMNS = {
     "ticket_id",
@@ -23,18 +25,6 @@ NUMERIC_RULES = {
     "resolution_time_hours": "must be a finite number greater than or equal to 0",
     "customer_rating": "must be a finite number between 1 and 5, inclusive",
 }
-
-
-class InvalidCSVError(ValueError):
-    """Raised when the input file cannot be parsed as a CSV."""
-
-
-class EmptyDatasetError(ValueError):
-    """Raised when the CSV contains headers but no ticket records."""
-
-
-class MissingColumnsError(ValueError):
-    """Raised when one or more required columns are absent."""
 
 
 class TicketDataProcessor:
