@@ -1,19 +1,22 @@
-"""Day 1 compatibility facade.
+"""Day 1 compatibility facade: ``TicketDataProcessor`` and ``build_analytics``.
 
 ``TicketDataProcessor`` used to read, validate, clean, report and save in one
-class. It now only delegates to the Day 2 components, so existing callers and
-the Day 1 tests keep working. New code should use ``TicketPipeline`` or the
-components directly.
+class, and ``build_analytics`` hard-coded four metrics. Both now only delegate
+to the Day 2 components, so existing callers and the Day 1 tests keep
+working. New code should use ``TicketPipeline`` or the components directly.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from .analytics import TicketAnalytics, day1_operations
 from .cleaning import TicketCleaner
+from .conversion import frame_to_tickets
 from .errors import EmptyDatasetError, InvalidCSVError, MissingColumnsError
 from .loading import CsvTicketLoader
 from .models import DuplicatePolicy
@@ -21,10 +24,30 @@ from .writers import CleanedCsvWriter
 
 __all__ = [
     "TicketDataProcessor",
+    "build_analytics",
     "EmptyDatasetError",
     "InvalidCSVError",
     "MissingColumnsError",
 ]
+
+
+def build_analytics(
+    cleaned_data: pd.DataFrame, processing_report: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
+    """Deprecated: the Day 1 summary (four metrics plus report fields)."""
+    tickets = frame_to_tickets(cleaned_data)
+    report = processing_report or {}
+    return {
+        **TicketAnalytics(day1_operations()).run(tickets),
+        "missing_values_after_cleaning": report.get(
+            "missing_values_after_cleaning", cleaned_data.isna().sum().astype(int).to_dict()
+        ),
+        "missing_values_before_cleaning": report.get("missing_values_before_cleaning", {}),
+        "invalid_numeric_values": report.get("invalid_numeric_values", {}),
+        "invalid_record_count": report.get("invalid_record_count", 0),
+        "duplicate_ticket_ids": report.get("duplicate_ticket_ids", []),
+        "rows_dropped_missing_ticket_id": report.get("rows_dropped_missing_ticket_id", 0),
+    }
 
 
 class TicketDataProcessor:

@@ -122,6 +122,17 @@ class ValidationIssue:
     reason: str
 
 
+# Report fields that appear in the analytics output, in the Day 1 order.
+QUALITY_KEYS: tuple[str, ...] = (
+    "missing_values_after_cleaning",
+    "missing_values_before_cleaning",
+    "invalid_numeric_values",
+    "invalid_record_count",
+    "duplicate_ticket_ids",
+    "rows_dropped_missing_ticket_id",
+)
+
+
 @dataclass(frozen=True)
 class CleaningReport:
     """What cleaning did, returned as a value rather than stored on the cleaner."""
@@ -165,3 +176,8 @@ class CleaningReport:
             "invalid_record_reasons": self.invalid_record_reasons,
             "duplicate_policy": self.duplicate_policy.value,
         }
+
+    def quality_summary(self) -> dict[str, Any]:
+        """The data-quality subset that is published next to the metrics."""
+        report = self.to_dict()
+        return {key: report[key] for key in QUALITY_KEYS}
