@@ -14,6 +14,13 @@
   },
   "average_customer_rating": 4.0,
   "unresolved_ticket_count": 10,
+  "resolution_rate_by_category": {
+    "account": 0.8,
+    "billing": 0.67,
+    "shipping": 0.6,
+    "technical": 0.33,
+    "unknown": 0.0
+  },
   "missing_values_after_cleaning": {
     "ticket_id": 0,
     "category": 0,

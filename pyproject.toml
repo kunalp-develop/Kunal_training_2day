@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "day1-ticket-pipeline"
-version = "0.1.0"
-description = "Day 1 Python engineering and support-ticket data pipeline assignment"
+name = "day2-ticket-pipeline"
+version = "0.2.0"
+description = "Day 2: support-ticket pipeline refactored into reusable OOP components"
 requires-python = ">=3.10"
 dependencies = ["pandas>=2.0", "numpy>=1.24"]
 

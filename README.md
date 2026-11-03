@@ -1,60 +1,8 @@
-# Day 1 — Support Ticket Data Pipeline
+# Day 2: Support ticket pipeline, refactored into reusable components
 
-This project loads a messy support-ticket CSV, checks it, cleans it, and prints a simple summary. 
+Day 1 built a pipeline that reads a messy support-ticket CSV, cleans a copy and prints analytics. Day 2 keeps every Day 1 result the same, but rebuilds the code from small classes that each do one job. It also adds one new metric through a plug-in interface, without touching the existing ones.
 
-
-The main idea: **never change the original file**. Read `data/tickets.csv`, clean a copy, save that copy as `data/cleaned_tickets.csv`, and report what was wrong.
-
----
-
-## Why this approach?
-
-Support tickets in real files often have blank IDs, duplicate IDs, mixed case, extra spaces, and numbers that are not numbers. If we skip cleaning, later analytics (or models) will be wrong.
-
-So the code:
-
-1. **Stops early** when the file itself is unusable (empty, not a CSV, missing columns).
-2. **Cleans in a visible order** so each rule is easy to explain in a viva.
-3. **Keeps a report** of what was dropped or marked invalid. Cleaning without a report hides problems.
-4. **Writes a new file** instead of overwriting the raw CSV, so you can always go back.
-
----
-
-## How the pipeline runs
-
-```text
-tickets.csv  →  TicketDataProcessor.process()  →  cleaned table
-                                              →  processor.report (quality notes)
-                 save_cleaned_data()           →  cleaned_tickets.csv
-                 build_analytics()             →  JSON summary printed in the terminal
-```
-
-`run_pipeline.py` is the script that does those steps in order.
-
----
-
-## Project files
-
-```text
-day1_ticket_pipeline/
-├── data/
-│   ├── tickets.csv                  Raw sample data (do not overwrite)
-│   ├── cleaned_tickets.csv          Cleaned output (created by the run)
-│   └── quality_issues.csv           Row-level issues (created by the run)
-├── src/ticket_pipeline/
-│   ├── __init__.py                  Public names you can import
-│   ├── processor.py                 Load, validate, clean
-│   └── analytics.py                 Counts and averages
-├── tests/test_processor.py          12 automated tests
-├── run_pipeline.py                  One command to run everything
-├── requirements.txt                 pandas, numpy, pytest
-├── pyproject.toml                   Package + pytest settings
-├── sample_analytics_output.json     Example summary from the sample CSV
-├── DAY1_CODING_PLAN.md              Planning notes
-└── README.md
-```
-
----
+The original file is never changed: `data/tickets.csv` is read, and the outputs go to new files.
 
 ## Setup
 
@@ -67,188 +15,31 @@ python -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 
-pip install -r requirements.txt
+pip install -e . pytest
 ```
 
----
-
-## Run the pipeline
-
-From the project folder:
+## Run
 
 ```bash
 python run_pipeline.py
 ```
 
-This reads `data/tickets.csv`, writes `data/cleaned_tickets.csv` and `data/quality_issues.csv`, and prints the analytics JSON. The raw file stays unchanged. Both output files are local-only (listed in `.gitignore`). The quality CSV has one row per record with an issue; `source_record_number` is one-based, starting at the first data row after the header, and `issues` contains semicolon-separated issue codes.
+This reads `data/tickets.csv` and writes `data/cleaned_tickets.csv` and `data/quality_issues.csv`. It then prints the analytics JSON; the output from the sample file is saved in `sample_analytics_output.json` and `logs/pipeline_run.txt`.
 
-Use the same steps in your own code:
+From your own code:
 
 ```python
-from pathlib import Path
-from ticket_pipeline import TicketDataProcessor, build_analytics
+from ticket_pipeline import CsvTicketLoader, DuplicatePolicy, TicketCleaner, TicketPipeline
 
-raw_file = Path("data/tickets.csv")
-clean_file = Path("data/cleaned_tickets.csv")
+result = TicketPipeline(
+    CsvTicketLoader("data/tickets.csv"),
+    cleaner=TicketCleaner(DuplicatePolicy.RAISE),  # optional: refuse files with duplicate IDs
+).run()
 
-processor = TicketDataProcessor(raw_file, output_path=clean_file)
-cleaned = processor.process()
-processor.save_cleaned_data(cleaned)
-report = build_analytics(cleaned, processor.report)
-print(report)
+result.tickets      # tuple of validated SupportTicket objects
+result.report       # CleaningReport: what was dropped, masked or filled, and why
+result.analytics    # dict: metrics + data-quality fields
 ```
-
----
-
-## Code explained in simple language
-
-### `run_pipeline.py` — `main()`
-
-**What it does:** Creates a processor, cleans the sample CSV, saves the result, builds analytics, prints JSON.
-
-**Why:** One entry point so you do not have to remember import paths. It adds `src/` to Python’s path so `ticket_pipeline` can be imported from the project root.
-
----
-
-### `src/ticket_pipeline/__init__.py`
-
-**What it does:** Re-exports `TicketDataProcessor`, `build_analytics`, and the three custom errors.
-
-**Why:** Other files can write `from ticket_pipeline import TicketDataProcessor` instead of importing inner modules.
-
----
-
-### Custom errors in `processor.py`
-
-These are small subclasses of `ValueError`. They exist so tests and callers can catch **specific** failures instead of a generic “something went wrong”.
-
-| Error | When it is raised | Why |
-|---|---|---|
-| `InvalidCSVError` | File is not a readable CSV | A broken file should not be silently treated as empty data |
-| `EmptyDatasetError` | No header, or header but zero ticket rows | Analytics on nothing is misleading |
-| `MissingColumnsError` | A required column is absent | Cleaning cannot start if the schema is incomplete |
-
----
-
-### `TicketDataProcessor.__init__(input_path, output_path, duplicate_policy)`
-
-**What it does:** Stores paths, checks that `duplicate_policy` is `'keep_first'` or `'raise'`, and starts an empty `report`.
-
-**Why:** Setup happens once. The policy is locked before any rows are touched, so cleaning behaviour is predictable.
-
----
-
-### `_read_csv()`
-
-**What it does:** Reads the CSV with pandas, treating empty cells as missing but preserving text such as `"NA"`, `"N/A"`, and `"NULL"`. Turns pandas/file errors into `InvalidCSVError` or `EmptyDatasetError`.
-
-**Why:** Pandas error messages are technical. The wrapper gives a sentence a teammate can understand. Default NA-token parsing can silently erase legitimate identifiers and text, so only empty CSV fields count as missing.
-
----
-
-### `_validate_columns(frame)`
-
-**What it does:** Compares the file’s column names to `REQUIRED_COLUMNS` (`ticket_id`, `category`, `priority`, `description`, `resolution_time_hours`, `customer_rating`, `status`). Raises `MissingColumnsError` listing what is missing.
-
-**Why:** If `priority` is missing, later analytics for “tickets by priority” would crash or invent data. Fail before cleaning.
-
----
-
-### `_normalise_text(series)`
-
-**What it does:** Converts a column to text, trims spaces, and treats `"   "` as missing.
-
-**Why:** `" Billing "` and `"billing"` should be the same. A cell with only spaces is not a real value.
-
----
-
-### `process()` — the main cleaning function
-
-This is the heart of the project. It runs in this order, for a reason:
-
-1. **Read and check columns**  
-   Do not clean a file that is the wrong shape.
-
-2. **Normalise text**  
-   Uppercase `ticket_id`. Lowercase `category`, `priority`, `status`. Trim `description`.  
-   **Why:** Duplicate IDs like `t-1` and `T-1` should match. Counts by priority should not split `High` and `high`.
-
-3. **Drop rows with no ticket ID**  
-   **Why:** Without an ID you cannot track or de-duplicate a ticket. The count of dropped rows goes into the report.
-
-4. **Handle duplicate IDs**  
-   Default `keep_first`: keep the first row in file order, drop later copies.  
-   `duplicate_policy="raise"`: stop and ask a human to review.  
-   **Why:** This is a training default, not a universal business rule. Source order is treated as “first write wins” unless you choose to fail closed.
-
-5. **Fix numeric columns**  
-   - `resolution_time_hours`: must be a real number ≥ 0 (zero is allowed).  
-   - `customer_rating`: must be a real number from 1 to 5.  
-   Bad values (text, infinity, negatives, rating 6) become missing (`NaN`).  
-   **Why:** We do not guess a rating or a time. Invented numbers would make averages look better than they are.
-
-6. **Fill remaining text gaps**  
-   Missing category / priority / status → `"unknown"`. Missing description → `""`.  
-   **Why:** Text fields need a visible placeholder so they still group in counts. Numbers stay `NaN` on purpose.
-
-7. **Build `self.report`**  
-   Source row count, cleaned row count, dropped IDs, duplicate IDs, missing values before/after, invalid number counts, and reasons per original row index.
-
-Returns a cleaned pandas DataFrame with a fresh 0-based index.
-
----
-
-### `save_cleaned_data(cleaned_data, output_path)`
-
-**What it does:** Writes the cleaned table to CSV. Creates parent folders if needed. Refuses if the destination is the same as the raw input.
-
-**Why:** Overwriting the original file would destroy evidence of data quality issues.
-
----
-
-### `build_analytics(cleaned_data, processing_report)` in `analytics.py`
-
-**What it does:** Builds one dictionary (easy to print as JSON).
-
-| Field | Meaning | Why this definition |
-|---|---|---|
-| `ticket_count_by_priority` | How many cleaned tickets per priority, including `unknown` | Shows workload mix after cleaning |
-| `average_resolution_time_hours_by_category` | Mean of **valid** times only; skip categories with no valid times | Missing times must not become 0 |
-| `average_customer_rating` | Mean of valid ratings, rounded to 2 decimals; `None` if none exist | Same reason: do not average in invented scores |
-| `unresolved_ticket_count` | Status is unresolved unless it is `resolved` or `closed` | Open, pending, in_progress, and unknown all still need work |
-| Quality fields copied from `processor.report` | Missing values, invalid numbers, duplicates, dropped IDs | Analytics and quality stay in one output |
-
-If the cleaned table is empty, counts are zero / empty / `None` instead of crashing.
-
----
-
-## Cleaning rules (quick table)
-
-| Problem | What the code does |
-|---|---|
-| Cannot parse the file | `InvalidCSVError` |
-| No ticket rows | `EmptyDatasetError` |
-| Missing required column | `MissingColumnsError` |
-| Blank ticket ID | Drop the row |
-| Duplicate ticket ID | Keep first (or raise if policy is `raise`) |
-| Missing category / priority / status | Fill `unknown` |
-| Missing description | Fill empty string |
-| Missing number | Leave as `NaN` |
-| Bad resolution time | Set to `NaN` |
-| Rating outside 1–5 | Set to `NaN` |
-| Extra spaces / mixed case | Trim; ID upper; labels lower |
-| Save path = raw path | Refuse to write |
-
-These are **training assumptions**. A real company might use timestamps for duplicates or a fixed list of allowed categories.
-
-## Known limitations
-
-- Duplicate IDs use the first source occurrence because the sample has no timestamp or other rule for choosing a canonical record.
-- Resolution times must be finite and nonnegative; customer ratings must be finite and between 1 and 5 inclusive. These ranges are assignment assumptions, not configurable business rules.
-- Category, priority, and status values are normalized but not checked against an approved vocabulary. Unrecognized statuses remain unresolved; only `resolved` and `closed` count as complete.
-- The quality CSV identifies records by their one-based data-row position rather than ticket ID, so row numbers refer to the unchanged source file.
-
----
 
 ## Tests
 
@@ -256,52 +47,96 @@ These are **training assumptions**. A real company might use timestamps for dupl
 python -m pytest -v --override-ini addopts=
 ```
 
-There are **13 tests** in `tests/test_processor.py`. Each one checks one behaviour:
+There are 107 tests. The last full run is saved in `test_results.txt`.
 
-| Test | What it proves |
+| File | Covers |
 |---|---|
-| `test_valid_input_is_cleaned_and_raw_file_is_unchanged` | Happy path works; original CSV is not edited |
-| `test_na_like_text_values_are_preserved_but_empty_cells_are_missing` | NA-like text is retained while blank fields remain missing |
-| `test_invalid_csv_raises_clear_exception` | Broken CSV → `InvalidCSVError` |
-| `test_empty_dataset_raises_clear_exception` | Header only → `EmptyDatasetError` |
-| `test_missing_required_columns_are_reported` | Missing columns are named in the error |
-| `test_duplicate_ids_keep_first_and_are_reported` | First duplicate is kept; report lists the ID |
-| `test_invalid_numeric_values_become_missing_and_are_counted` | Bad times/ratings become `NaN` and are counted |
-| `test_missing_ticket_id_is_dropped_and_missing_text_gets_placeholder` | Blank ID dropped; other blanks become `unknown` / `""` |
-| `test_processor_refuses_to_overwrite_raw_csv` | Save will not replace the input file |
-| `test_duplicate_policy_can_fail_closed` | `duplicate_policy="raise"` stops on duplicates |
-| `test_analytics_calculates_priority_rating_and_unresolved_count` | Priority counts, billing average, rating, unresolved count |
+| `tests/test_models.py` | `SupportTicket` accepts valid values and rejects every kind of invalid one; it is frozen; `__repr__`/`__str__`; mutable defaults are not shared |
+| `tests/test_loading.py` | Malformed CSVs, including the Day 1 P0 regression (a row with an extra field), short rows, an empty file, a missing file and bad encoding |
+| `tests/test_validation.py` | Numeric rule boundaries, missing-column detection, unrecognised priorities |
+| `tests/test_cleaning.py` | Each cleaning policy, tested on in-memory DataFrames; the raw frame is not modified; no state is left over between runs |
+| `tests/test_conversion_and_writers.py` | The table → model boundary; the raw-file overwrite guard; the quality CSV format |
+| `tests/test_analytics.py` | Each metric on hand-built tickets; adding a custom metric without changing the engine; duplicate metric names |
+| `tests/test_pipeline.py` | A fake loader (no disk); the golden test (Day 1 numbers unchanged); an end-to-end run leaves the raw file byte-for-byte the same |
+| `tests/test_processor.py` | The 13 original Day 1 tests, **unchanged**, run against the compatibility layer |
 
-The `[ 10%]`, `[ 20%]`, … numbers in pytest are **progress**, not a score. `13 passed` means every test succeeded.
+## How it is built
 
----
+```
+CsvTicketLoader ──► TicketCleaner ──► frame_to_tickets ──► TicketAnalytics
+ (read file,         (normalise, drop,   (DataFrame →         (runs a list of
+  check rows)         mask, fill, report)  SupportTicket)        metric objects)
+                     └──────────── composed by TicketPipeline ───────────┘
+                     file output: CleanedCsvWriter, QualityReportWriter
+```
 
-## Check the sample file by hand
+| Module | One job |
+|---|---|
+| `models.py` | `SupportTicket`, a frozen dataclass that is valid or cannot be created; `Priority`; `CleaningReport` |
+| `schema.py` | Column names, resolved statuses and numeric limits, each defined once |
+| `loading.py` | File → raw table, with clear errors |
+| `validation.py` | Decide what is invalid |
+| `cleaning.py` | Decide what to do about it, and report it |
+| `conversion.py` | Cleaned table → tickets |
+| `analytics/` | One class per metric, plus an engine that runs a list of them |
+| `writers.py` | All file output |
+| `pipeline.py` | Wiring only |
+| `processor.py` | Day 1 API (`TicketDataProcessor`, `build_analytics`) as thin wrappers |
 
-Using `data/tickets.csv` and the rules above:
+The reasons for each split, the inheritance vs composition comparison, and how to add a metric are in **[docs/DESIGN.md](docs/DESIGN.md)**.
 
-1. **23 tickets kept:** 25 source rows − 1 missing ID − 1 duplicate = 23. Priorities: high 7 + low 7 + medium 8 + unknown 1.
-2. **Billing average 3.4 hours:** valid times 2.5, 3.5, 6.0, 3.0, 2.0 → sum 17.0 → 17 / 5 = 3.4.
-3. **10 unresolved:** statuses that are not `resolved` or `closed`.
+### The new metric (Task C)
 
-Full printed output is in `sample_analytics_output.json`.
+`resolution_rate_by_category` is the share of each category's tickets that are `resolved` or `closed`, rounded to 2 places. Checked by hand on the sample data:
 
----
+| Category | Resolved / total | Rate |
+|---|---|---|
+| account | 4 / 5 | 0.8 |
+| billing | 4 / 6 | 0.67 |
+| shipping | 3 / 5 | 0.6 |
+| technical | 2 / 6 | 0.33 |
+| unknown | 0 / 1 | 0.0 |
 
-## What this project does not do
+## Cleaning rules and assumptions
 
-- Guess missing numbers
-- Check category/priority against an official list
-- Detect “same ticket, different wording”
-- Train a model, split train/test, or build RAG/agents/APIs
+These are the same as Day 1 unless marked **new**.
 
-Next steps in a production system: logging, config files, schema versions, and monitoring.
+| Input problem | Result |
+|---|---|
+| File missing, not UTF-8, or not parseable | `InvalidCSVError` |
+| **New:** a row with more or fewer fields than the header | `InvalidCSVError` naming the line (Day 1 P0 fix) |
+| Empty file, or header only | `EmptyDatasetError` |
+| Required column missing | `MissingColumnsError` listing the missing columns |
+| Blank or whitespace-only ticket ID | Row dropped and reported |
+| Duplicate ticket ID | First occurrence kept (or `DuplicateTicketError` with `DuplicatePolicy.RAISE`) |
+| Resolution time not a number, negative or infinite | Becomes missing (`NaN` / `None`) and is reported |
+| Rating not a number, outside 1–5 or infinite | Becomes missing and is reported |
+| **New:** priority other than low / medium / high | Becomes `unknown` and is reported as `invalid_priority` (none in the sample data) |
+| Missing category / priority / status | `unknown` |
+| Missing description | `""` |
+| Saving over the raw file | Refused |
 
----
+Other assumptions:
+- Only `resolved` and `closed` count as resolved.
+- Text such as `NA`, `N/A` or `NULL` is real data; only empty cells are missing.
+- Source order decides which duplicate wins, because the data has no timestamps.
 
-## Git
+## Known limitations
 
-Remote: [https://github.com/kunalp-develop/Kunal_training_1day-](https://github.com/kunalp-develop/Kunal_training_1day-)  
-Branch: `day1-ticket-pipeline`
+- **Two representations.** Cleaning works on a pandas DataFrame and analytics works on `SupportTicket` objects, so the data is copied once. That is fine for files this size, but not for millions of rows.
+- **Whole-file loading.** The file is read twice (once for the field-count check, once by pandas) and held in memory; there is no streaming.
+- **Open vocabularies.** Category and status are not checked against an approved list. Any status other than `resolved`/`closed` counts as unresolved.
+- **Strict row shape.** A row with the wrong number of fields rejects the whole file instead of being skipped, so one bad row stops the run. That is deliberate, because a shifted row is worse than no data.
+- **`missing_values_before_cleaning` undercounts.** It counts only empty cells; whitespace-only cells become missing during cleaning, so they are counted only in `missing_values_after_cleaning`. Kept for Day 1 compatibility.
+- **Strict compatibility layer.** `build_analytics(df)` now converts the frame to `SupportTicket`s, so a frame that was not produced by the cleaner (for example, one with priority `urgent`) raises `InvalidTicketError`. Day 1 accepted it silently.
 
-Do not commit `.venv`, `__pycache__`, `.pytest_cache`, or `data/cleaned_tickets.csv`.
+## Day 1 compatibility
+
+`TicketDataProcessor` and `build_analytics` still work exactly as before, and the 13 Day 1 tests pass unchanged. Internally they now call the new components. New code should use `TicketPipeline`.
+
+## Other files
+
+- `study/`: the four study-hour outputs (object model, composition vs inheritance, the data model, a design review of the Day 1 class)
+- `VIVA_ANSWERS.md`, `DAILY_REPORT.md`
+- `logs/day1_baseline_output.json`: Day 1 output captured before the refactor (used by the golden test)
+- `logs/pipeline_run.txt`, `test_results.txt`: saved output from the final run
